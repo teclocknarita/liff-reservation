@@ -664,6 +664,56 @@ function dlog(msg, type) {
 }
 
 // ================================================================
+// JSONP ヘルパー
+// GAS は 302 リダイレクトを返すため fetch では扱えない。
+// script タグ挿入で JSONP コールバックを受け取る。
+// ================================================================
+function fetchJsonp(endpoint, params, timeoutMs) {
+  timeoutMs = timeoutMs || 10000;
+  return new Promise(function(resolve, reject) {
+    // ユニークなコールバック名を生成
+    var cbName = '_gasJsonpCb_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+
+    var timer = setTimeout(function() {
+      cleanup();
+      reject(new Error('タイムアウト（' + (timeoutMs / 1000) + '秒）: GAS APIから応答がありませんでした'));
+    }, timeoutMs);
+
+    function cleanup() {
+      clearTimeout(timer);
+      if (window[cbName]) delete window[cbName];
+      var el = document.getElementById(cbName);
+      if (el) el.parentNode.removeChild(el);
+    }
+
+    // グローバルコールバック関数を登録
+    window[cbName] = function(data) {
+      cleanup();
+      dlog('JSONP callback 受信', 'ok');
+      resolve(data);
+    };
+
+    // クエリ文字列組み立て
+    var qs = 'callback=' + encodeURIComponent(cbName);
+    Object.keys(params).forEach(function(k) {
+      qs += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+    });
+    var url = endpoint + '?' + qs;
+    dlog('JSONP script src=' + url);
+
+    // script タグ挿入
+    var script = document.createElement('script');
+    script.id  = cbName;
+    script.src = url;
+    script.onerror = function() {
+      cleanup();
+      reject(new Error('script タグの読み込みに失敗しました。URLまたはネットワークを確認してください。'));
+    };
+    document.head.appendChild(script);
+  });
+}
+
+// ================================================================
 // 初期化
 // ================================================================
 (async function init() {
@@ -709,40 +759,23 @@ function dlog(msg, type) {
       );
     }
 
-    // ── Step 4: GAS API 通信 ──
-    step = 'GAS API通信';
-    const apiUrl = CONFIG.GAS_ENDPOINT + '?clinic_id=' + encodeURIComponent(clinicId);
-    dlog('fetch() 開始 url=' + apiUrl);
-    let res;
+    // ── Step 4 & 5: GAS API 通信（JSONP） ──
+    // GAS WebアプリはCORSプリフライトに対応していないため、
+    // script タグ動的挿入による JSONP 方式で取得する。
+    step = 'GAS API通信(JSONP)';
+    dlog('jsonp() 開始 clinic_id=' + clinicId);
+    let json;
     try {
-      res = await fetch(apiUrl);
-    } catch (fetchErr) {
+      json = await fetchJsonp(CONFIG.GAS_ENDPOINT, { clinic_id: clinicId }, 10000);
+    } catch (jsonpErr) {
       throw new Error(
         'GAS APIへの接続に失敗しました。\n' +
-        'ネットワーク接続またはエンドポイントURLを確認してください。\n' +
-        '詳細: ' + fetchErr.message
+        '・GASのデプロイURLが正しいか確認してください。\n' +
+        '・アクセス権限が「全員（匿名を含む）」か確認してください。\n' +
+        '詳細: ' + jsonpErr.message
       );
     }
-    dlog('fetch() 完了 status=' + res.status + ' ok=' + res.ok, res.ok ? 'ok' : 'err');
-    if (!res.ok) {
-      throw new Error('GAS APIがHTTPエラーを返しました (status=' + res.status + ')');
-    }
-
-    // ── Step 5: レスポンス解析 ──
-    step = 'レスポンス解析';
-    let json;
-    const raw = await res.text();
-    dlog('response raw (先頭100文字): ' + raw.slice(0, 100));
-    try {
-      json = JSON.parse(raw);
-    } catch (parseErr) {
-      throw new Error(
-        'GAS APIのレスポンスをJSONとして解析できませんでした。\n' +
-        'GASのデプロイ設定（アクセス: 全員）を確認してください。\n' +
-        'レスポンス先頭: ' + raw.slice(0, 200)
-      );
-    }
-    dlog('JSON parse 完了 success=' + json.success, json.success ? 'ok' : 'err');
+    dlog('jsonp() 完了 success=' + json.success, json.success ? 'ok' : 'err');
     if (!json.success) {
       throw new Error('GAS APIエラー: ' + (json.error || '不明なエラー'));
     }
