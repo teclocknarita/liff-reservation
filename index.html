@@ -31,9 +31,7 @@
       line-height: 1.6;
     }
 
-    /* ── 画面制御 ── */
-    .screen { display: none; }
-    .screen.active { display: block; }
+    /* ── 画面制御: JS で style.display を直接操作 ── */
 
     /* ── ヘッダー ── */
     .header {
@@ -300,13 +298,13 @@
 
     /* ── ローディング ── */
     #screen-loading {
+      display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
       gap: 16px;
     }
-    #screen-loading.active { display: flex; }
     .spinner {
       width: 40px;
       height: 40px;
@@ -319,6 +317,7 @@
 
     /* ── エラー画面 ── */
     #screen-error {
+      display: none;
       flex-direction: column;
       align-items: flex-start;
       justify-content: flex-start;
@@ -326,7 +325,6 @@
       padding: 24px 16px;
       gap: 10px;
     }
-    #screen-error.active { display: flex; }
     #screen-error .error-icon { font-size: 40px; align-self: center; }
     #screen-error h2 { font-size: 17px; color: var(--error); align-self: center; }
     .error-step-badge {
@@ -400,13 +398,13 @@
 <!-- ★★★ 設定ここまで ★★★ -->
 
 <!-- ローディング画面 -->
-<div id="screen-loading" class="screen active">
+<div id="screen-loading" style="display:flex">
   <div class="spinner"></div>
   <p style="color:var(--subtext);font-size:14px;">読み込み中…</p>
 </div>
 
 <!-- エラー画面 -->
-<div id="screen-error" class="screen">
+<div id="screen-error" style="display:none">
   <div class="error-icon">⚠️</div>
   <h2>エラーが発生しました</h2>
   <div class="error-step-badge" id="error-step"></div>
@@ -420,7 +418,7 @@
 
 
 <!-- フォーム画面 -->
-<div id="screen-form" class="screen">
+<div id="screen-form" style="display:none">
   <div class="header">
     <h1 id="clinic-name">仮予約フォーム</h1>
     <p id="clinic-address"></p>
@@ -522,7 +520,7 @@
 </div>
 
 <!-- 確認画面 -->
-<div id="screen-confirm" class="screen">
+<div id="screen-confirm" style="display:none">
   <div class="header">
     <h1>予約内容の確認</h1>
     <p>内容をご確認の上、送信してください</p>
@@ -544,7 +542,7 @@
 </div>
 
 <!-- 完了画面 -->
-<div id="screen-complete" class="screen">
+<div id="screen-complete" style="display:none">
   <div class="header">
     <h1>仮予約受付完了</h1>
   </div>
@@ -1120,10 +1118,13 @@ function escHtml(str) {
 }
 
 function showScreen(name) {
-  document.querySelectorAll('.screen').forEach(function(s) {
-    s.classList.remove('active');
+  ['loading', 'error', 'form', 'confirm', 'complete'].forEach(function(id) {
+    var el = document.getElementById('screen-' + id);
+    if (el) el.style.display = 'none';
   });
-  document.getElementById('screen-' + name).classList.add('active');
+  var target = document.getElementById('screen-' + name);
+  if (!target) return;
+  target.style.display = (name === 'loading' || name === 'error') ? 'flex' : 'block';
 }
 
 function showError(step, err) {
