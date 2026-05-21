@@ -711,14 +711,14 @@ function fetchJsonp(endpoint, params, timeoutMs) {
 // ================================================================
 function buildForm() {
   // ヘッダー
-  document.getElementById('clinic-name').textContent = clinicData.name || '仮予約フォーム';
+  document.getElementById('clinic-name').textContent = clinicData.clinic_name || '仮予約フォーム';
   document.getElementById('clinic-address').textContent = clinicData.address || '';
 
   // バナー
   const bannerPhone = document.getElementById('banner-phone');
-  if (clinicData.phone) {
+  if (clinicData.clinic_phone) {
     bannerPhone.innerHTML =
-      '電話: <a href="tel:' + clinicData.phone + '">' + clinicData.phone + '</a>';
+      '電話: <a href="tel:' + clinicData.clinic_phone + '">' + clinicData.clinic_phone + '</a>';
   }
   const bannerHp = document.getElementById('banner-hp');
   if (clinicData.hp_url) {
