@@ -321,16 +321,105 @@
     #screen-error {
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
+      align-items: flex-start;
+      justify-content: flex-start;
       min-height: 100vh;
-      padding: 24px;
-      text-align: center;
-      gap: 12px;
+      padding: 24px 16px;
+      gap: 10px;
     }
-    #screen-error .error-icon { font-size: 48px; }
-    #screen-error h2 { font-size: 18px; color: var(--error); }
-    #screen-error p { font-size: 14px; color: var(--subtext); }
+    #screen-error .error-icon { font-size: 40px; align-self: center; }
+    #screen-error h2 { font-size: 17px; color: var(--error); align-self: center; }
+    .error-step-badge {
+      display: inline-block;
+      background: #fce4e4;
+      color: var(--error);
+      border-radius: 20px;
+      padding: 2px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      align-self: center;
+    }
+    .error-detail-card {
+      width: 100%;
+      background: #fff;
+      border: 1.5px solid #ffcdd2;
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .error-detail-card b { color: var(--error); }
+    .error-trace {
+      width: 100%;
+      background: #1e1e1e;
+      color: #f8f8f2;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 11px;
+      font-family: 'Courier New', monospace;
+      white-space: pre-wrap;
+      word-break: break-all;
+      line-height: 1.5;
+      display: none;
+    }
+    .error-trace.visible { display: block; }
+    .toggle-trace {
+      font-size: 12px;
+      color: var(--subtext);
+      cursor: pointer;
+      text-decoration: underline;
+      background: none;
+      border: none;
+      padding: 0;
+    }
+
+    /* ── デバッグログ ── */
+    #debug-log-wrap {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: rgba(30,30,30,.95);
+      color: #a8ff78;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      max-height: 40vh;
+      overflow-y: auto;
+      z-index: 9999;
+      display: none;
+    }
+    #debug-log-wrap.visible { display: block; }
+    #debug-log-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 10px;
+      background: #111;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      position: sticky;
+      top: 0;
+    }
+    #debug-log-header button {
+      background: none; border: none; color: #aaa;
+      cursor: pointer; font-size: 13px;
+    }
+    #debug-log-body { padding: 6px 10px; }
+    .dlog-line { padding: 1px 0; }
+    .dlog-line.ok   { color: #a8ff78; }
+    .dlog-line.err  { color: #ff6b6b; }
+    .dlog-line.warn { color: #ffd93d; }
+    .dlog-line.info { color: #74b9ff; }
+
+    /* ── 外部ブラウザバナー ── */
+    .ext-browser-banner {
+      background: #e3f2fd;
+      border: 1.5px solid #90caf9;
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: #1565c0;
+    }
 
     /* ── フッターパディング ── */
     .footer-pad { height: 24px; }
@@ -357,7 +446,22 @@
 <div id="screen-error" class="screen">
   <div class="error-icon">⚠️</div>
   <h2>エラーが発生しました</h2>
-  <p id="error-message"></p>
+  <div class="error-step-badge" id="error-step"></div>
+  <div class="error-detail-card">
+    <b>エラー内容</b><br>
+    <span id="error-message"></span>
+  </div>
+  <button class="toggle-trace" id="toggle-trace-btn" onclick="toggleTrace()">▶ スタックトレースを表示</button>
+  <pre class="error-trace" id="error-trace"></pre>
+</div>
+
+<!-- デバッグログパネル -->
+<div id="debug-log-wrap">
+  <div id="debug-log-header">
+    🐛 Debug Log
+    <button onclick="document.getElementById('debug-log-wrap').classList.remove('visible')">✕</button>
+  </div>
+  <div id="debug-log-body"></div>
 </div>
 
 <!-- フォーム画面 -->
@@ -368,6 +472,11 @@
   </div>
 
   <div class="container">
+    <!-- 外部ブラウザ通知バナー（LINEアプリ外で開いた場合） -->
+    <div class="ext-browser-banner" id="ext-browser-banner" style="display:none;">
+      ⚠️ LINEアプリ外で開いています。ユーザー情報は取得されません（デモモード）。
+    </div>
+
     <!-- 当日・翌営業日バナー -->
     <div class="urgent-banner" id="urgent-banner">
       <div class="banner-title">📞 当日・翌営業日のご予約はお電話で</div>
@@ -538,47 +647,117 @@ let liffProfile  = null;
 let formSnapshot = null; // 確認画面表示時のフォームデータ
 
 // ================================================================
+// デバッグログ
+// ================================================================
+function dlog(msg, type) {
+  type = type || 'info';
+  console.log('[' + type.toUpperCase() + '] ' + msg);
+  const wrap = document.getElementById('debug-log-wrap');
+  const body = document.getElementById('debug-log-body');
+  if (!wrap || !body) return;
+  wrap.classList.add('visible');
+  const line = document.createElement('div');
+  line.className = 'dlog-line ' + type;
+  line.textContent = '[' + new Date().toLocaleTimeString('ja-JP') + '] ' + msg;
+  body.appendChild(line);
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+// ================================================================
 // 初期化
 // ================================================================
 (async function init() {
+  let step = '起動';
   try {
-    // LIFF 初期化
+    // ── Step 1: LIFF SDK 初期化 ──
+    step = 'LIFF初期化';
+    dlog('liff.init() 開始 LIFF_ID=' + CONFIG.LIFF_ID);
     await liff.init({ liffId: CONFIG.LIFF_ID });
+    dlog('liff.init() 完了', 'ok');
+    dlog('isInClient=' + liff.isInClient() + ' isLoggedIn=' + liff.isLoggedIn());
 
-    // ログイン (LINE ブラウザ外でもデモ動作可)
-    if (!liff.isLoggedIn()) {
-      if (liff.isInClient()) {
-        liff.login();
-        return;
-      }
-      // ブラウザデモ: プロフィールなしで続行
+    // ── Step 2: ログイン / プロフィール取得 ──
+    step = 'ログイン・プロフィール取得';
+    const isExtBrowser = !liff.isInClient();
+    if (isExtBrowser) {
+      dlog('外部ブラウザで起動（デモモード）', 'warn');
+      document.getElementById('ext-browser-banner').style.display = 'block';
+      // 外部ブラウザ: ログイン試行せずプロフィールなしで続行
+    } else if (!liff.isLoggedIn()) {
+      dlog('未ログイン → liff.login() へリダイレクト', 'warn');
+      liff.login({ redirectUri: window.location.href });
+      return;
     } else {
+      dlog('ログイン済み → getProfile() 開始');
       try {
         liffProfile = await liff.getProfile();
-      } catch (_) { /* プロフィール取得失敗は無視 */ }
+        dlog('getProfile() 完了 userId=' + liffProfile.userId, 'ok');
+      } catch (profileErr) {
+        dlog('getProfile() 失敗（続行）: ' + profileErr.message, 'warn');
+      }
     }
 
-    // clinic_id を URL から取得
-    const params   = new URLSearchParams(liff.getDecodedIDToken
-      ? window.location.search
-      : window.location.search);
+    // ── Step 3: clinic_id 取得 ──
+    step = 'clinic_id取得';
+    const params   = new URLSearchParams(window.location.search);
     const clinicId = params.get('clinic_id');
-    if (!clinicId) throw new Error('URLに clinic_id が指定されていません。\n例: ?clinic_id=clinic001');
+    dlog('clinic_id=' + (clinicId || '（なし）'));
+    if (!clinicId) {
+      throw new Error(
+        'URLに clinic_id が指定されていません。\n' +
+        '例: ' + window.location.pathname + '?clinic_id=clinic001'
+      );
+    }
 
-    // 医院情報を GAS から取得
-    const res = await fetch(
-      CONFIG.GAS_ENDPOINT + '?clinic_id=' + encodeURIComponent(clinicId)
-    );
-    if (!res.ok) throw new Error('医院情報の取得に失敗しました (HTTP ' + res.status + ')');
-    const json = await res.json();
-    if (!json.success) throw new Error(json.error || '医院情報の取得に失敗しました');
+    // ── Step 4: GAS API 通信 ──
+    step = 'GAS API通信';
+    const apiUrl = CONFIG.GAS_ENDPOINT + '?clinic_id=' + encodeURIComponent(clinicId);
+    dlog('fetch() 開始 url=' + apiUrl);
+    let res;
+    try {
+      res = await fetch(apiUrl);
+    } catch (fetchErr) {
+      throw new Error(
+        'GAS APIへの接続に失敗しました。\n' +
+        'ネットワーク接続またはエンドポイントURLを確認してください。\n' +
+        '詳細: ' + fetchErr.message
+      );
+    }
+    dlog('fetch() 完了 status=' + res.status + ' ok=' + res.ok, res.ok ? 'ok' : 'err');
+    if (!res.ok) {
+      throw new Error('GAS APIがHTTPエラーを返しました (status=' + res.status + ')');
+    }
 
+    // ── Step 5: レスポンス解析 ──
+    step = 'レスポンス解析';
+    let json;
+    const raw = await res.text();
+    dlog('response raw (先頭100文字): ' + raw.slice(0, 100));
+    try {
+      json = JSON.parse(raw);
+    } catch (parseErr) {
+      throw new Error(
+        'GAS APIのレスポンスをJSONとして解析できませんでした。\n' +
+        'GASのデプロイ設定（アクセス: 全員）を確認してください。\n' +
+        'レスポンス先頭: ' + raw.slice(0, 200)
+      );
+    }
+    dlog('JSON parse 完了 success=' + json.success, json.success ? 'ok' : 'err');
+    if (!json.success) {
+      throw new Error('GAS APIエラー: ' + (json.error || '不明なエラー'));
+    }
+
+    // ── Step 6: フォーム構築 ──
+    step = 'フォーム構築';
     clinicData = json.clinic;
+    dlog('医院名=' + clinicData.name + ' treatments=' + JSON.stringify(clinicData.treatments_array));
     buildForm();
     showScreen('form');
+    dlog('フォーム表示完了', 'ok');
 
   } catch (err) {
-    showError(err.message);
+    dlog('ERROR [' + step + '] ' + err.message, 'err');
+    showError(step, err);
   }
 })();
 
@@ -900,6 +1079,7 @@ async function onSubmit() {
   } catch (err) {
     btn.disabled    = false;
     btn.textContent = 'この内容で予約を送信する';
+    dlog('送信エラー: ' + err.message, 'err');
     alert('エラー: ' + err.message + '\n\nお手数ですがお電話でご予約ください。');
   }
 }
@@ -1000,9 +1180,32 @@ function showScreen(name) {
   document.getElementById('screen-' + name).classList.add('active');
 }
 
-function showError(msg) {
+function showError(step, err) {
+  var msg   = (err && err.message) ? err.message : String(err || '不明なエラー');
+  var trace = (err && err.stack)   ? err.stack   : '';
+
+  document.getElementById('error-step').textContent    = 'ステップ: ' + (step || '不明');
   document.getElementById('error-message').textContent = msg;
+
+  var traceEl = document.getElementById('error-trace');
+  if (trace) {
+    traceEl.textContent = trace;
+  } else {
+    document.getElementById('toggle-trace-btn').style.display = 'none';
+  }
   showScreen('error');
+}
+
+function toggleTrace() {
+  var traceEl = document.getElementById('error-trace');
+  var btn     = document.getElementById('toggle-trace-btn');
+  if (traceEl.classList.contains('visible')) {
+    traceEl.classList.remove('visible');
+    btn.textContent = '▶ スタックトレースを表示';
+  } else {
+    traceEl.classList.add('visible');
+    btn.textContent = '▼ スタックトレースを隠す';
+  }
 }
 </script>
 </body>
