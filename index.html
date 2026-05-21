@@ -300,13 +300,13 @@
 
     /* ── ローディング ── */
     #screen-loading {
-      display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
       gap: 16px;
     }
+    #screen-loading.active { display: flex; }
     .spinner {
       width: 40px;
       height: 40px;
@@ -319,7 +319,6 @@
 
     /* ── エラー画面 ── */
     #screen-error {
-      display: flex;
       flex-direction: column;
       align-items: flex-start;
       justify-content: flex-start;
@@ -327,6 +326,7 @@
       padding: 24px 16px;
       gap: 10px;
     }
+    #screen-error.active { display: flex; }
     #screen-error .error-icon { font-size: 40px; align-self: center; }
     #screen-error h2 { font-size: 17px; color: var(--error); align-self: center; }
     .error-step-badge {
@@ -373,43 +373,6 @@
       padding: 0;
     }
 
-    /* ── デバッグログ ── */
-    #debug-log-wrap {
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      background: rgba(30,30,30,.95);
-      color: #a8ff78;
-      font-family: 'Courier New', monospace;
-      font-size: 11px;
-      max-height: 40vh;
-      overflow-y: auto;
-      z-index: 9999;
-      display: none;
-    }
-    #debug-log-wrap.visible { display: block; }
-    #debug-log-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 4px 10px;
-      background: #111;
-      color: #fff;
-      font-size: 11px;
-      font-weight: 700;
-      position: sticky;
-      top: 0;
-    }
-    #debug-log-header button {
-      background: none; border: none; color: #aaa;
-      cursor: pointer; font-size: 13px;
-    }
-    #debug-log-body { padding: 6px 10px; }
-    .dlog-line { padding: 1px 0; }
-    .dlog-line.ok   { color: #a8ff78; }
-    .dlog-line.err  { color: #ff6b6b; }
-    .dlog-line.warn { color: #ffd93d; }
-    .dlog-line.info { color: #74b9ff; }
-
     /* ── 外部ブラウザバナー ── */
     .ext-browser-banner {
       background: #e3f2fd;
@@ -455,14 +418,6 @@
   <pre class="error-trace" id="error-trace"></pre>
 </div>
 
-<!-- デバッグログパネル -->
-<div id="debug-log-wrap">
-  <div id="debug-log-header">
-    🐛 Debug Log
-    <button onclick="document.getElementById('debug-log-wrap').classList.remove('visible')">✕</button>
-  </div>
-  <div id="debug-log-body"></div>
-</div>
 
 <!-- フォーム画面 -->
 <div id="screen-form" class="screen">
@@ -647,23 +602,6 @@ let liffProfile  = null;
 let formSnapshot = null; // 確認画面表示時のフォームデータ
 
 // ================================================================
-// デバッグログ
-// ================================================================
-function dlog(msg, type) {
-  type = type || 'info';
-  console.log('[' + type.toUpperCase() + '] ' + msg);
-  const wrap = document.getElementById('debug-log-wrap');
-  const body = document.getElementById('debug-log-body');
-  if (!wrap || !body) return;
-  wrap.classList.add('visible');
-  const line = document.createElement('div');
-  line.className = 'dlog-line ' + type;
-  line.textContent = '[' + new Date().toLocaleTimeString('ja-JP') + '] ' + msg;
-  body.appendChild(line);
-  wrap.scrollTop = wrap.scrollHeight;
-}
-
-// ================================================================
 // JSONP ヘルパー
 // GAS は 302 リダイレクトを返すため fetch では扱えない。
 // script タグ挿入で JSONP コールバックを受け取る。
@@ -671,7 +609,6 @@ function dlog(msg, type) {
 function fetchJsonp(endpoint, params, timeoutMs) {
   timeoutMs = timeoutMs || 10000;
   return new Promise(function(resolve, reject) {
-    // ユニークなコールバック名を生成
     var cbName = '_gasJsonpCb_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
 
     var timer = setTimeout(function() {
@@ -686,25 +623,19 @@ function fetchJsonp(endpoint, params, timeoutMs) {
       if (el) el.parentNode.removeChild(el);
     }
 
-    // グローバルコールバック関数を登録
     window[cbName] = function(data) {
       cleanup();
-      dlog('JSONP callback 受信', 'ok');
       resolve(data);
     };
 
-    // クエリ文字列組み立て
     var qs = 'callback=' + encodeURIComponent(cbName);
     Object.keys(params).forEach(function(k) {
       qs += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
     });
-    var url = endpoint + '?' + qs;
-    dlog('JSONP script src=' + url);
 
-    // script タグ挿入
     var script = document.createElement('script');
     script.id  = cbName;
-    script.src = url;
+    script.src = endpoint + '?' + qs;
     script.onerror = function() {
       cleanup();
       reject(new Error('script タグの読み込みに失敗しました。URLまたはネットワークを確認してください。'));
@@ -719,39 +650,28 @@ function fetchJsonp(endpoint, params, timeoutMs) {
 (async function init() {
   let step = '起動';
   try {
-    // ── Step 1: LIFF SDK 初期化 ──
+    // Step 1: LIFF 初期化
     step = 'LIFF初期化';
-    dlog('liff.init() 開始 LIFF_ID=' + CONFIG.LIFF_ID);
     await liff.init({ liffId: CONFIG.LIFF_ID });
-    dlog('liff.init() 完了', 'ok');
-    dlog('isInClient=' + liff.isInClient() + ' isLoggedIn=' + liff.isLoggedIn());
 
-    // ── Step 2: ログイン / プロフィール取得 ──
+    // Step 2: ログイン / プロフィール取得
     step = 'ログイン・プロフィール取得';
-    const isExtBrowser = !liff.isInClient();
-    if (isExtBrowser) {
-      dlog('外部ブラウザで起動（デモモード）', 'warn');
+    if (!liff.isInClient()) {
+      // 外部ブラウザ: デモモードで続行
       document.getElementById('ext-browser-banner').style.display = 'block';
-      // 外部ブラウザ: ログイン試行せずプロフィールなしで続行
     } else if (!liff.isLoggedIn()) {
-      dlog('未ログイン → liff.login() へリダイレクト', 'warn');
       liff.login({ redirectUri: window.location.href });
       return;
     } else {
-      dlog('ログイン済み → getProfile() 開始');
       try {
         liffProfile = await liff.getProfile();
-        dlog('getProfile() 完了 userId=' + liffProfile.userId, 'ok');
-      } catch (profileErr) {
-        dlog('getProfile() 失敗（続行）: ' + profileErr.message, 'warn');
-      }
+      } catch (_) { /* プロフィール取得失敗は無視して続行 */ }
     }
 
-    // ── Step 3: clinic_id 取得 ──
+    // Step 3: clinic_id 取得
     step = 'clinic_id取得';
     const params   = new URLSearchParams(window.location.search);
     const clinicId = params.get('clinic_id');
-    dlog('clinic_id=' + (clinicId || '（なし）'));
     if (!clinicId) {
       throw new Error(
         'URLに clinic_id が指定されていません。\n' +
@@ -759,11 +679,9 @@ function fetchJsonp(endpoint, params, timeoutMs) {
       );
     }
 
-    // ── Step 4 & 5: GAS API 通信（JSONP） ──
-    // GAS WebアプリはCORSプリフライトに対応していないため、
-    // script タグ動的挿入による JSONP 方式で取得する。
-    step = 'GAS API通信(JSONP)';
-    dlog('jsonp() 開始 clinic_id=' + clinicId);
+    // Step 4: GAS API 通信（JSONP）
+    // GAS WebアプリはCORSプリフライトに対応していないため script タグ挿入で取得する
+    step = 'GAS API通信';
     let json;
     try {
       json = await fetchJsonp(CONFIG.GAS_ENDPOINT, { clinic_id: clinicId }, 10000);
@@ -775,21 +693,17 @@ function fetchJsonp(endpoint, params, timeoutMs) {
         '詳細: ' + jsonpErr.message
       );
     }
-    dlog('jsonp() 完了 success=' + json.success, json.success ? 'ok' : 'err');
     if (!json.success) {
       throw new Error('GAS APIエラー: ' + (json.error || '不明なエラー'));
     }
 
-    // ── Step 6: フォーム構築 ──
+    // Step 5: フォーム構築・表示
     step = 'フォーム構築';
     clinicData = json.clinic;
-    dlog('医院名=' + clinicData.name + ' treatments=' + JSON.stringify(clinicData.treatments_array));
     buildForm();
     showScreen('form');
-    dlog('フォーム表示完了', 'ok');
 
   } catch (err) {
-    dlog('ERROR [' + step + '] ' + err.message, 'err');
     showError(step, err);
   }
 })();
@@ -1112,7 +1026,6 @@ async function onSubmit() {
   } catch (err) {
     btn.disabled    = false;
     btn.textContent = 'この内容で予約を送信する';
-    dlog('送信エラー: ' + err.message, 'err');
     alert('エラー: ' + err.message + '\n\nお手数ですがお電話でご予約ください。');
   }
 }
