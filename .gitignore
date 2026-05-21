@@ -1,0 +1,23 @@
+# clasp 認証情報（絶対にコミットしないこと）
+.clasprc.json
+gas/.clasp.json
+
+# clasp プロジェクト設定（スクリプトIDを含むため非公開推奨）
+# 公開リポジトリの場合は下行をコメントアウト
+# gas/.clasp.json
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# エディタ
+.vscode/
+.idea/
+*.swp
+*.swo
