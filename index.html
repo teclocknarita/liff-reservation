@@ -574,6 +574,11 @@
       こちらは仮予約です。確定予約は医院からのご連絡をもってお知らせします。<br>
       お急ぎの場合はお電話でお問い合わせください。
     </div>
+    <button type="button" class="btn btn-primary" id="btn-close-liff"
+            style="font-size:17px;padding:16px;margin-top:8px;"
+            onclick="closeLiff()">
+      LINEトークに戻る
+    </button>
     <div class="footer-pad"></div>
   </div>
 </div>
@@ -1107,6 +1112,15 @@ function formatDate(d) {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return y + '-' + m + '-' + dd;
+}
+
+function closeLiff() {
+  if (liff.isInClient()) {
+    liff.closeWindow();
+  } else {
+    // 外部ブラウザではタブを閉じる（または何もしない）
+    window.close();
+  }
 }
 
 function escHtml(str) {
