@@ -383,7 +383,29 @@
     }
 
     /* ── カレンダー ── */
-    .cal-header {
+    .cal-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .cal-nav-btn {
+      background: none;
+      border: 1.5px solid var(--border);
+      border-radius: 6px;
+      width: 32px; height: 32px;
+      font-size: 16px;
+      cursor: pointer;
+      color: var(--text);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cal-nav-btn:disabled { color: #ccc; border-color: #eee; cursor: default; }
+    .cal-month-label {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .cal-dow-header {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
       text-align: center;
@@ -391,14 +413,13 @@
       font-weight: 700;
       margin-bottom: 4px;
     }
-    .cal-header span { padding: 4px 0; }
-    .cal-header .col-sat { color: #1565c0; }
-    .cal-header .col-sun { color: var(--error); }
-
+    .cal-dow-header span { padding: 3px 0; }
+    .cal-dow-header .h-sun { color: var(--error); }
+    .cal-dow-header .h-sat { color: #1565c0; }
     .cal-grid {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
-      gap: 4px;
+      gap: 3px;
     }
     .cal-cell {
       aspect-ratio: 1;
@@ -411,55 +432,26 @@
       font-weight: 600;
       cursor: pointer;
       border: 1.5px solid transparent;
-      transition: background .15s, border-color .15s;
-      line-height: 1.2;
+      transition: background .15s;
+      line-height: 1.15;
       user-select: none;
+      -webkit-tap-highlight-color: transparent;
     }
     .cal-cell .cal-day   { font-size: 15px; font-weight: 700; }
-    .cal-cell .cal-label { font-size: 10px; }
+    .cal-cell .cal-sub   { font-size: 9px; margin-top: 1px; }
 
-    /* 選択可能（営業日） */
-    .cal-cell.available {
-      background: #f5f5f5;
-      color: var(--text);
-    }
-    .cal-cell.available:active { background: #e0f7e9; }
+    .cal-cell.empty      { background: transparent; border: none; cursor: default; }
+    .cal-cell.available  { background: #fff; color: var(--text); border-color: var(--border); }
+    .cal-cell.available:active { background: #e8f8ee; }
+    .cal-cell.available.sat { color: #1565c0; }
+    .cal-cell.available.sun { color: var(--error); }
+    .cal-cell.today      { border-color: var(--line-green) !important; }
+    .cal-cell.too-soon   { background: #f5f5f5; color: #c0c0c0; cursor: not-allowed; border-color: transparent; }
+    .cal-cell.closed     { background: #f0f0f0; color: #bbb; cursor: not-allowed; border-color: transparent; }
+    .cal-cell.selected   { background: var(--line-green); color: #fff; border-color: var(--line-dark); }
+    .cal-cell.other-month { opacity: 0; pointer-events: none; }
 
-    /* 選択中 */
-    .cal-cell.selected {
-      background: var(--line-green);
-      color: #fff;
-      border-color: var(--line-dark);
-    }
-
-    /* 当日・翌営業日（電話対応） */
-    .cal-cell.too-soon {
-      background: #f5f5f5;
-      color: #bbb;
-      cursor: not-allowed;
-    }
-
-    /* 休診日 */
-    .cal-cell.closed {
-      background: #eeeeee;
-      color: #bbb;
-      cursor: not-allowed;
-    }
-
-    /* 空白セル（月の頭合わせ用） */
-    .cal-cell.empty {
-      background: transparent;
-      border: none;
-      cursor: default;
-    }
-
-    /* 土・日の文字色 */
-    .cal-cell.col-sat { color: #1565c0; }
-    .cal-cell.col-sat.selected { color: #fff; }
-    .cal-cell.col-sun { color: var(--error); }
-    .cal-cell.col-sun.selected { color: #fff; }
-
-    /* フッターパディング */
+    /* ── フッターパディング ── */
     .footer-pad { height: 24px; }
   </style>
 </head>
@@ -852,102 +844,149 @@ function buildForm() {
 // ================================================================
 // カレンダー描画
 // ================================================================
-function buildCalendar() {
-  const closed   = clinicData.closed_days_array || [];
-  const today    = new Date(); today.setHours(0,0,0,0);
-  const minDate  = getMinSelectableDate(closed); // 選択可能な最初の日
+// カレンダーの表示月（Date オブジェクト、1日に正規化）
+var calViewMonth = null;
 
+function buildCalendar() {
+  const today   = new Date(); today.setHours(0,0,0,0);
+  const closed  = clinicData.closed_days_array || [];
+  const minDate = getMinSelectableDate(closed);
+
+  // 初回は今日の月から開始
+  if (!calViewMonth) {
+    calViewMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  }
+
+  renderCalendar(calViewMonth, today, minDate, closed);
+}
+
+function renderCalendar(viewMonth, today, minDate, closed) {
   const wrap = document.getElementById('calendar-wrap');
   wrap.innerHTML = '';
 
-  // 2週間分の日付を今日から生成（14日）
-  const days = [];
-  for (let i = 0; i < 14; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
-    days.push(d);
-  }
+  const y = viewMonth.getFullYear();
+  const m = viewMonth.getMonth(); // 0-based
 
-  // 最初の日の曜日でグリッドの頭を合わせる（月曜始まり）
-  const firstDow = days[0].getDay(); // 0=日
-  const offset   = (firstDow + 6) % 7; // 月曜起点のオフセット
+  // 今月より前には戻れない
+  const todayMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const prevDisabled = viewMonth <= todayMonth;
 
-  // ヘッダー
-  const header = document.createElement('div');
-  header.className = 'cal-header';
-  ['月','火','水','木','金','土','日'].forEach(function(d, i) {
-    const s = document.createElement('span');
-    s.textContent = d;
-    if (i === 5) s.className = 'col-sat';
-    if (i === 6) s.className = 'col-sun';
-    header.appendChild(s);
+  // ナビゲーション
+  const nav = document.createElement('div');
+  nav.className = 'cal-nav';
+
+  const btnPrev = document.createElement('button');
+  btnPrev.type = 'button';
+  btnPrev.className = 'cal-nav-btn';
+  btnPrev.textContent = '‹';
+  btnPrev.disabled = prevDisabled;
+  btnPrev.addEventListener('click', function() {
+    calViewMonth = new Date(y, m - 1, 1);
+    renderCalendar(calViewMonth, today, minDate, closed);
   });
-  wrap.appendChild(header);
 
-  // グリッド
+  const monthLabel = document.createElement('span');
+  monthLabel.className = 'cal-month-label';
+  monthLabel.textContent = y + '年' + (m + 1) + '月';
+
+  const btnNext = document.createElement('button');
+  btnNext.type = 'button';
+  btnNext.className = 'cal-nav-btn';
+  btnNext.textContent = '›';
+  btnNext.addEventListener('click', function() {
+    calViewMonth = new Date(y, m + 1, 1);
+    renderCalendar(calViewMonth, today, minDate, closed);
+  });
+
+  nav.appendChild(btnPrev);
+  nav.appendChild(monthLabel);
+  nav.appendChild(btnNext);
+  wrap.appendChild(nav);
+
+  // 曜日ヘッダー（日〜土）
+  const dowHeader = document.createElement('div');
+  dowHeader.className = 'cal-dow-header';
+  [['日','h-sun'],['月',''],['火',''],['水',''],['木',''],['金',''],['土','h-sat']].forEach(function(pair) {
+    const s = document.createElement('span');
+    s.textContent = pair[0];
+    if (pair[1]) s.className = pair[1];
+    dowHeader.appendChild(s);
+  });
+  wrap.appendChild(dowHeader);
+
+  // グリッド（日曜始まり）
   const grid = document.createElement('div');
   grid.className = 'cal-grid';
 
-  // 空白セルでオフセット
-  for (let i = 0; i < offset; i++) {
+  const firstDay  = new Date(y, m, 1);
+  const lastDay   = new Date(y, m + 1, 0);
+  const startDow  = firstDay.getDay(); // 0=日
+
+  // 月頭の空白
+  for (let i = 0; i < startDow; i++) {
     const empty = document.createElement('div');
     empty.className = 'cal-cell empty';
     grid.appendChild(empty);
   }
 
-  days.forEach(function(d) {
-    const dow      = d.getDay(); // 0=日〜6=土
-    const dateStr  = formatDate(d);
-    const isClosed = closed.includes(dow);
-    const isTooSoon = d < minDate;
-    const dowMon   = (dow + 6) % 7; // 月曜=0
+  // 日付セル
+  const selectedVal = document.getElementById('date').value;
+  for (let day = 1; day <= lastDay.getDate(); day++) {
+    const d       = new Date(y, m, day);
+    const dow     = d.getDay();
+    const dateStr = formatDate(d);
+    const isToday    = (d.getTime() === today.getTime());
+    const isTooSoon  = d < minDate;
+    const isClosed   = closed.includes(dow);
+    const isSelected = (dateStr === selectedVal);
 
     const cell = document.createElement('div');
     cell.dataset.date = dateStr;
 
-    const dayEl   = document.createElement('div');
+    const dayEl = document.createElement('div');
     dayEl.className = 'cal-day';
-    dayEl.textContent = d.getDate();
+    dayEl.textContent = day;
 
-    const labelEl = document.createElement('div');
-    labelEl.className = 'cal-label';
+    const subEl = document.createElement('div');
+    subEl.className = 'cal-sub';
 
     if (isClosed) {
       cell.className = 'cal-cell closed';
-      labelEl.textContent = '休';
+      subEl.textContent = '休';
     } else if (isTooSoon) {
       cell.className = 'cal-cell too-soon';
-      labelEl.textContent = '×';
+      subEl.textContent = '✕';
     } else {
       cell.className = 'cal-cell available';
-      if (dowMon === 5) cell.classList.add('col-sat');
-      if (dowMon === 6) cell.classList.add('col-sun');
+      if (dow === 0) cell.classList.add('sun');
+      if (dow === 6) cell.classList.add('sat');
       cell.addEventListener('click', function() {
         selectCalendarDate(dateStr);
       });
     }
 
+    if (isToday)    cell.classList.add('today');
+    if (isSelected) { cell.classList.add('selected'); }
+
     cell.appendChild(dayEl);
-    cell.appendChild(labelEl);
+    cell.appendChild(subEl);
     grid.appendChild(cell);
-  });
+  }
 
   wrap.appendChild(grid);
 }
 
 function selectCalendarDate(dateStr) {
-  // hidden input に値をセット
   document.getElementById('date').value = dateStr;
   clearError('date');
 
-  // 選択状態の見た目を更新
+  // 選択セルのハイライト更新
   document.querySelectorAll('.cal-cell.selected').forEach(function(c) {
     c.classList.remove('selected');
   });
   const target = document.querySelector('.cal-cell[data-date="' + dateStr + '"]');
   if (target) target.classList.add('selected');
 
-  // 時間スロット再生成
   onDateChange();
 }
 
@@ -1113,6 +1152,10 @@ function restoreForm() {
   if (!formSnapshot) return;
   document.getElementById('name').value     = formSnapshot.name;
   document.getElementById('phone').value    = formSnapshot.phone;
+  // カレンダーを選択日の月に移動してから選択
+  var parts = formSnapshot.date.split('-').map(Number);
+  calViewMonth = new Date(parts[0], parts[1] - 1, 1);
+  buildCalendar();
   selectCalendarDate(formSnapshot.date);
   setTimeout(function() {
     document.getElementById('time').value = formSnapshot.time;
