@@ -89,6 +89,30 @@
       padding-bottom: 8px;
       border-bottom: 1px solid var(--border);
     }
+    .slot-card .card-title.slot-toggle {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+    .slot-card .card-title.slot-toggle:active {
+      opacity: 0.7;
+    }
+    .slot-toggle-icon {
+      font-size: 18px;
+      font-weight: 400;
+      color: var(--primary);
+      line-height: 1;
+    }
+    .slot-body {
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
 
     /* ── フォーム要素 ── */
     .form-group { margin-bottom: 14px; }
@@ -543,34 +567,44 @@
       </div>
 
       <!-- 希望日時 第2希望 -->
-      <div class="card">
-        <div class="card-title">第2希望日時<span class="optional" style="font-size:11px;margin-left:6px;">任意</span></div>
-        <div class="form-group">
-          <label>希望日</label>
-          <input type="hidden" id="date2">
-          <div id="calendar-wrap-2"></div>
+      <div class="card slot-card" id="card-slot2">
+        <div class="card-title slot-toggle" onclick="toggleSlot(2)">
+          <span>第2希望日時<span class="optional" style="font-size:11px;margin-left:6px;">任意</span></span>
+          <span class="slot-toggle-icon" id="icon-slot2">＋</span>
         </div>
-        <div class="form-group">
-          <label for="time2">希望時間</label>
-          <select id="time2" disabled>
-            <option value="">— 先に希望日を選択 —</option>
-          </select>
+        <div class="slot-body" id="slot-body-2" style="display:none">
+          <div class="form-group">
+            <label>希望日</label>
+            <input type="hidden" id="date2">
+            <div id="calendar-wrap-2"></div>
+          </div>
+          <div class="form-group">
+            <label for="time2">希望時間</label>
+            <select id="time2" disabled>
+              <option value="">— 先に希望日を選択 —</option>
+            </select>
+          </div>
         </div>
       </div>
 
       <!-- 希望日時 第3希望 -->
-      <div class="card">
-        <div class="card-title">第3希望日時<span class="optional" style="font-size:11px;margin-left:6px;">任意</span></div>
-        <div class="form-group">
-          <label>希望日</label>
-          <input type="hidden" id="date3">
-          <div id="calendar-wrap-3"></div>
+      <div class="card slot-card" id="card-slot3">
+        <div class="card-title slot-toggle" onclick="toggleSlot(3)">
+          <span>第3希望日時<span class="optional" style="font-size:11px;margin-left:6px;">任意</span></span>
+          <span class="slot-toggle-icon" id="icon-slot3">＋</span>
         </div>
-        <div class="form-group">
-          <label for="time3">希望時間</label>
-          <select id="time3" disabled>
-            <option value="">— 先に希望日を選択 —</option>
-          </select>
+        <div class="slot-body" id="slot-body-3" style="display:none">
+          <div class="form-group">
+            <label>希望日</label>
+            <input type="hidden" id="date3">
+            <div id="calendar-wrap-3"></div>
+          </div>
+          <div class="form-group">
+            <label for="time3">希望時間</label>
+            <select id="time3" disabled>
+              <option value="">— 先に希望日を選択 —</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -846,10 +880,8 @@ function buildForm() {
     updateSymptomsRequired();
   });
 
-  // カレンダー描画（3枠）
+  // カレンダー描画（第1希望のみ初期描画、第2・第3は展開時に描画）
   buildCalendar(1);
-  buildCalendar(2);
-  buildCalendar(3);
 
   // ラジオボタン見た目
   document.querySelectorAll('.radio-label input[type="radio"]').forEach(function(radio) {
@@ -1207,6 +1239,29 @@ function onConfirm() {
 // ================================================================
 // フォームの値を復元
 // ================================================================
+// 第2・第3希望スロット 開閉トグル
+// ================================================================
+function toggleSlot(n) {
+  var body = document.getElementById('slot-body-' + n);
+  var icon = document.getElementById('icon-slot' + n);
+  if (body.style.display === 'none') {
+    body.style.display = 'block';
+    icon.textContent = '－';
+    buildCalendar(n);
+  } else {
+    body.style.display = 'none';
+    icon.textContent = '＋';
+    // 値をクリア
+    document.getElementById('date' + n).value = '';
+    var sel = document.getElementById('time' + n);
+    sel.innerHTML = '<option value="">— 先に希望日を選択 —</option>';
+    sel.disabled = true;
+    calStartMonths[n] = null;
+    document.getElementById('calendar-wrap-' + n).innerHTML = '';
+  }
+}
+
+// ================================================================
 function restoreForm() {
   if (!formSnapshot) return;
   document.getElementById('name').value  = formSnapshot.name;
@@ -1217,11 +1272,23 @@ function restoreForm() {
     var dateKey = n === 1 ? 'date' : 'date' + n;
     var timeKey = n === 1 ? 'time' : 'time' + n;
     var dateVal = formSnapshot[dateKey];
+    // スロット2・3は値があれば展開
+    if (n >= 2) {
+      var body = document.getElementById('slot-body-' + n);
+      var icon = document.getElementById('icon-slot' + n);
+      if (dateVal) {
+        body.style.display = 'block';
+        icon.textContent = '－';
+      } else {
+        body.style.display = 'none';
+        icon.textContent = '＋';
+      }
+    }
     if (dateVal) {
       var parts = dateVal.split('-').map(Number);
       calStartMonths[n] = new Date(parts[0], parts[1] - 1, 1);
     }
-    buildCalendar(n);
+    if (n === 1 || dateVal) buildCalendar(n);
     if (dateVal) selectCalendarDate(dateVal, n);
     setTimeout((function(nn, tv) {
       return function() { document.getElementById('time' + nn).value = tv; };
