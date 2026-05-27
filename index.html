@@ -383,6 +383,23 @@
     }
 
     /* ── カレンダー ── */
+    .cal-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .cal-nav-btn {
+      background: none;
+      border: 1.5px solid var(--border);
+      border-radius: 6px;
+      width: 32px; height: 32px;
+      font-size: 18px;
+      cursor: pointer;
+      color: var(--text);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cal-nav-btn:disabled { color: #ccc; border-color: #eee; cursor: default; }
     .cal-month-label {
       font-size: 15px;
       font-weight: 700;
@@ -827,20 +844,60 @@ function buildForm() {
 // ================================================================
 // カレンダー描画
 // ================================================================
+// 表示開始月（null = 当月）
+var calStartMonth = null;
+
 function buildCalendar() {
   const today   = new Date(); today.setHours(0,0,0,0);
   const closed  = clinicData.closed_days_array || [];
   const minDate = getMinSelectableDate(closed);
+  const todayMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+  if (!calStartMonth) calStartMonth = new Date(todayMonth);
 
   const wrap = document.getElementById('calendar-wrap');
   wrap.innerHTML = '';
 
-  // 当月・翌月の2ヶ月を描画
-  const months = [
-    new Date(today.getFullYear(), today.getMonth(), 1),
-    new Date(today.getFullYear(), today.getMonth() + 1, 1),
-  ];
-  months.forEach(function(monthStart) {
+  // ナビゲーション
+  const nav = document.createElement('div');
+  nav.className = 'cal-nav';
+
+  const btnPrev = document.createElement('button');
+  btnPrev.type = 'button';
+  btnPrev.className = 'cal-nav-btn';
+  btnPrev.textContent = '‹';
+  btnPrev.disabled = (calStartMonth <= todayMonth);
+  btnPrev.addEventListener('click', function() {
+    calStartMonth = new Date(calStartMonth.getFullYear(), calStartMonth.getMonth() - 1, 1);
+    buildCalendar();
+  });
+
+  const navLabel = document.createElement('span');
+  navLabel.style.fontSize = '13px';
+  navLabel.style.color = 'var(--subtext)';
+  navLabel.textContent = '月を切り替え';
+
+  const btnNext = document.createElement('button');
+  btnNext.type = 'button';
+  btnNext.className = 'cal-nav-btn';
+  btnNext.textContent = '›';
+  btnNext.addEventListener('click', function() {
+    calStartMonth = new Date(calStartMonth.getFullYear(), calStartMonth.getMonth() + 1, 1);
+    buildCalendar();
+  });
+
+  nav.appendChild(btnPrev);
+  nav.appendChild(navLabel);
+  nav.appendChild(btnNext);
+  wrap.appendChild(nav);
+
+  // 表示開始月と翌月の2ヶ月を描画
+  var sy = calStartMonth.getFullYear();
+  var sm = calStartMonth.getMonth();
+  [
+    new Date(sy, sm, 1),
+    new Date(sy, sm + 1, 1),
+  ].forEach(function(monthStart) {
     wrap.appendChild(renderMonthBlock(monthStart, today, minDate, closed));
   });
 }
@@ -1109,6 +1166,9 @@ function restoreForm() {
   if (!formSnapshot) return;
   document.getElementById('name').value     = formSnapshot.name;
   document.getElementById('phone').value    = formSnapshot.phone;
+  // 選択日の月が表示されるよう開始月を調整
+  var parts = formSnapshot.date.split('-').map(Number);
+  calStartMonth = new Date(parts[0], parts[1] - 1, 1);
   buildCalendar();
   selectCalendarDate(formSnapshot.date);
   setTimeout(function() {
