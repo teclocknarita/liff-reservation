@@ -79,6 +79,10 @@ function doPost(e) {
       body.phone,
       body.date,
       body.time,
+      body.date2            || '',
+      body.time2            || '',
+      body.date3            || '',
+      body.time3            || '',
       body.visit_type       || '',
       body.treatment        || '',
       body.symptoms         || '',
@@ -143,8 +147,9 @@ function sendLinePushMessage(userId, data, reservationId, token, clinicName, cli
     `予約ID : ${reservationId}\n` +
     `お名前 : ${data.name} 様\n` +
     `電話番号: ${data.phone}\n` +
-    `希望日 : ${data.date}\n` +
-    `希望時間: ${data.time}\n` +
+    `第1希望: ${data.date} ${data.time}\n` +
+    (data.date2 ? `第2希望: ${data.date2} ${data.time2}\n` : '') +
+    (data.date3 ? `第3希望: ${data.date3} ${data.time3}\n` : '') +
     `区　分 : ${visitLabel}\n` +
     `診療科目: ${treatmentLabel}\n` +
     (data.symptoms ? `相談内容: ${data.symptoms}\n` : '') +
@@ -262,8 +267,12 @@ function setupSpreadsheet() {
       'line_user_id',   // LINEユーザーID
       'name',           // 患者氏名
       'phone',          // 電話番号
-      'date',           // 希望日
-      'time',           // 希望時間
+      'date',           // 第1希望日
+      'time',           // 第1希望時間
+      'date2',          // 第2希望日
+      'time2',          // 第2希望時間
+      'date3',          // 第3希望日
+      'time3',          // 第3希望時間
       'visit_type',     // 初診/再診 (first/revisit)
       'treatment',      // 診療科目
       'symptoms',       // 症状・相談内容

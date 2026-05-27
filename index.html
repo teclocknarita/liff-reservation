@@ -524,24 +524,53 @@
         </div>
       </div>
 
-      <!-- 希望日時 -->
+      <!-- 希望日時 第1希望 -->
       <div class="card">
-        <div class="card-title">希望日時</div>
-
+        <div class="card-title">第1希望日時<span class="required" style="font-size:11px;margin-left:6px;">*必須</span></div>
         <div class="form-group">
-          <label>希望日<span class="required">*必須</span></label>
-          <!-- hidden: バリデーション・送信に使う値 -->
-          <input type="hidden" id="date">
-          <div id="calendar-wrap"></div>
-          <div class="error-msg" id="err-date">希望日を選択してください</div>
+          <label>希望日</label>
+          <input type="hidden" id="date1">
+          <div id="calendar-wrap-1"></div>
+          <div class="error-msg" id="err-date1">第1希望の日付を選択してください</div>
         </div>
-
         <div class="form-group">
-          <label for="time">希望時間<span class="required">*必須</span></label>
-          <select id="time" disabled>
+          <label for="time1">希望時間</label>
+          <select id="time1" disabled>
             <option value="">— 先に希望日を選択 —</option>
           </select>
-          <div class="error-msg" id="err-time">希望時間を選択してください</div>
+          <div class="error-msg" id="err-time1">第1希望の時間を選択してください</div>
+        </div>
+      </div>
+
+      <!-- 希望日時 第2希望 -->
+      <div class="card">
+        <div class="card-title">第2希望日時<span class="optional" style="font-size:11px;margin-left:6px;">任意</span></div>
+        <div class="form-group">
+          <label>希望日</label>
+          <input type="hidden" id="date2">
+          <div id="calendar-wrap-2"></div>
+        </div>
+        <div class="form-group">
+          <label for="time2">希望時間</label>
+          <select id="time2" disabled>
+            <option value="">— 先に希望日を選択 —</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 希望日時 第3希望 -->
+      <div class="card">
+        <div class="card-title">第3希望日時<span class="optional" style="font-size:11px;margin-left:6px;">任意</span></div>
+        <div class="form-group">
+          <label>希望日</label>
+          <input type="hidden" id="date3">
+          <div id="calendar-wrap-3"></div>
+        </div>
+        <div class="form-group">
+          <label for="time3">希望時間</label>
+          <select id="time3" disabled>
+            <option value="">— 先に希望日を選択 —</option>
+          </select>
         </div>
       </div>
 
@@ -817,8 +846,10 @@ function buildForm() {
     updateSymptomsRequired();
   });
 
-  // カレンダー描画
-  buildCalendar();
+  // カレンダー描画（3枠）
+  buildCalendar(1);
+  buildCalendar(2);
+  buildCalendar(3);
 
   // ラジオボタン見た目
   document.querySelectorAll('.radio-label input[type="radio"]').forEach(function(radio) {
@@ -844,32 +875,34 @@ function buildForm() {
 // ================================================================
 // カレンダー描画
 // ================================================================
-// 表示開始月（null = 当月）
-var calStartMonth = null;
+// 各枠の表示開始月
+var calStartMonths = { 1: null, 2: null, 3: null };
 
-function buildCalendar() {
-  const today   = new Date(); today.setHours(0,0,0,0);
-  const closed  = clinicData.closed_days_array || [];
-  const minDate = getMinSelectableDate(closed);
+function buildCalendar(n) {
+  const today      = new Date(); today.setHours(0,0,0,0);
+  const closed     = clinicData.closed_days_array || [];
+  const minDate    = getMinSelectableDate(closed);
   const todayMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-  if (!calStartMonth) calStartMonth = new Date(todayMonth);
+  if (!calStartMonths[n]) calStartMonths[n] = new Date(todayMonth);
 
-  const wrap = document.getElementById('calendar-wrap');
+  const wrap = document.getElementById('calendar-wrap-' + n);
   wrap.innerHTML = '';
 
   // ナビゲーション
   const nav = document.createElement('div');
   nav.className = 'cal-nav';
 
+  const sm = calStartMonths[n];
+
   const btnPrev = document.createElement('button');
   btnPrev.type = 'button';
   btnPrev.className = 'cal-nav-btn';
   btnPrev.textContent = '‹';
-  btnPrev.disabled = (calStartMonth <= todayMonth);
+  btnPrev.disabled = (sm <= todayMonth);
   btnPrev.addEventListener('click', function() {
-    calStartMonth = new Date(calStartMonth.getFullYear(), calStartMonth.getMonth() - 1, 1);
-    buildCalendar();
+    calStartMonths[n] = new Date(sm.getFullYear(), sm.getMonth() - 1, 1);
+    buildCalendar(n);
   });
 
   const navLabel = document.createElement('span');
@@ -882,8 +915,8 @@ function buildCalendar() {
   btnNext.className = 'cal-nav-btn';
   btnNext.textContent = '›';
   btnNext.addEventListener('click', function() {
-    calStartMonth = new Date(calStartMonth.getFullYear(), calStartMonth.getMonth() + 1, 1);
-    buildCalendar();
+    calStartMonths[n] = new Date(sm.getFullYear(), sm.getMonth() + 1, 1);
+    buildCalendar(n);
   });
 
   nav.appendChild(btnPrev);
@@ -891,18 +924,13 @@ function buildCalendar() {
   nav.appendChild(btnNext);
   wrap.appendChild(nav);
 
-  // 表示開始月と翌月の2ヶ月を描画
-  var sy = calStartMonth.getFullYear();
-  var sm = calStartMonth.getMonth();
-  [
-    new Date(sy, sm, 1),
-    new Date(sy, sm + 1, 1),
-  ].forEach(function(monthStart) {
-    wrap.appendChild(renderMonthBlock(monthStart, today, minDate, closed));
+  var sy2 = sm.getFullYear(), sm2 = sm.getMonth();
+  [new Date(sy2, sm2, 1), new Date(sy2, sm2 + 1, 1)].forEach(function(monthStart) {
+    wrap.appendChild(renderMonthBlock(monthStart, today, minDate, closed, n));
   });
 }
 
-function renderMonthBlock(monthStart, today, minDate, closed) {
+function renderMonthBlock(monthStart, today, minDate, closed, n) {
   const y = monthStart.getFullYear();
   const m = monthStart.getMonth();
 
@@ -943,7 +971,7 @@ function renderMonthBlock(monthStart, today, minDate, closed) {
   }
 
   // 日付セル
-  const selectedVal = document.getElementById('date').value;
+  const selectedVal = document.getElementById('date' + n).value;
   for (let day = 1; day <= lastDay.getDate(); day++) {
     const d       = new Date(y, m, day);
     const dow     = d.getDay();
@@ -973,9 +1001,9 @@ function renderMonthBlock(monthStart, today, minDate, closed) {
       cell.className = 'cal-cell available';
       if (dow === 0) cell.classList.add('sun');
       if (dow === 6) cell.classList.add('sat');
-      cell.addEventListener('click', (function(ds) {
-        return function() { selectCalendarDate(ds); };
-      })(dateStr));
+      cell.addEventListener('click', (function(ds, nn) {
+        return function() { selectCalendarDate(ds, nn); };
+      })(dateStr, n));
     }
 
     if (isToday)    cell.classList.add('today');
@@ -990,26 +1018,27 @@ function renderMonthBlock(monthStart, today, minDate, closed) {
   return block;
 }
 
-function selectCalendarDate(dateStr) {
-  document.getElementById('date').value = dateStr;
-  clearError('date');
+function selectCalendarDate(dateStr, n) {
+  document.getElementById('date' + n).value = dateStr;
+  if (n === 1) clearError('date1');
 
-  // 選択セルのハイライト更新
-  document.querySelectorAll('.cal-cell.selected').forEach(function(c) {
+  // 該当枠のカレンダー内だけ選択ハイライトを更新
+  var wrap = document.getElementById('calendar-wrap-' + n);
+  wrap.querySelectorAll('.cal-cell.selected').forEach(function(c) {
     c.classList.remove('selected');
   });
-  const target = document.querySelector('.cal-cell[data-date="' + dateStr + '"]');
+  var target = wrap.querySelector('.cal-cell[data-date="' + dateStr + '"]');
   if (target) target.classList.add('selected');
 
-  onDateChange();
+  onDateChange(n);
 }
 
 // ================================================================
 // 日付変更ハンドラ（カレンダー選択後に呼ばれる）
 // ================================================================
-function onDateChange() {
-  const dateVal    = document.getElementById('date').value;
-  const timeSelect = document.getElementById('time');
+function onDateChange(n) {
+  const dateVal    = document.getElementById('date' + n).value;
+  const timeSelect = document.getElementById('time' + n);
 
   if (!dateVal) {
     timeSelect.innerHTML = '<option value="">— 先に希望日を選択 —</option>';
@@ -1017,15 +1046,13 @@ function onDateChange() {
     return;
   }
 
-  // 時間スロット生成
   const schedule = clinicData.schedule_parsed || [];
   const slots    = generateTimeSlots(schedule);
 
   timeSelect.innerHTML = '<option value="">— 時間を選択 —</option>';
   slots.forEach(function(slot) {
-    const opt       = document.createElement('option');
-    opt.value       = slot;
-    opt.textContent = slot;
+    const opt = document.createElement('option');
+    opt.value = opt.textContent = slot;
     timeSelect.appendChild(opt);
   });
   timeSelect.disabled = (slots.length === 0);
@@ -1065,19 +1092,19 @@ function validate() {
   if (!phone) { showFieldError('phone', 'err-phone'); valid = false; }
   else         { clearError('phone'); }
 
-  // 希望日
-  const date = document.getElementById('date').value;
-  if (!date) {
-    showFieldError('date', 'err-date');
+  // 第1希望日
+  const date1 = document.getElementById('date1').value;
+  if (!date1) {
+    showFieldError('date1', 'err-date1');
     valid = false;
   } else {
-    clearError('date');
+    clearError('date1');
   }
 
-  // 希望時間
-  const time = document.getElementById('time').value;
-  if (!time) { showFieldError('time', 'err-time'); valid = false; }
-  else        { clearError('time'); }
+  // 第1希望時間
+  const time1 = document.getElementById('time1').value;
+  if (!time1) { showFieldError('time1', 'err-time1'); valid = false; }
+  else         { clearError('time1'); }
 
   // 診療科目
   const treatment = document.getElementById('treatment').value;
@@ -1119,35 +1146,53 @@ function onConfirm() {
     return;
   }
 
-  const treatment  = document.getElementById('treatment').value;
-  const visitType  = document.querySelector('input[name="visit_type"]:checked').value;
-  const [y, m, d]  = document.getElementById('date').value.split('-').map(Number);
-  const dateObj    = new Date(y, m - 1, d);
-  const dateLabel  = y + '年' + m + '月' + d + '日（' + DAY_NAMES[dateObj.getDay()] + '）';
+  const treatment = document.getElementById('treatment').value;
+  const visitType = document.querySelector('input[name="visit_type"]:checked').value;
+
+  function makeDateLabel(dateVal) {
+    if (!dateVal) return '';
+    const [y, mo, d] = dateVal.split('-').map(Number);
+    const obj = new Date(y, mo - 1, d);
+    return y + '年' + mo + '月' + d + '日（' + DAY_NAMES[obj.getDay()] + '）';
+  }
+
+  const date1 = document.getElementById('date1').value;
+  const date2 = document.getElementById('date2').value;
+  const date3 = document.getElementById('date3').value;
+  const time1 = document.getElementById('time1').value;
+  const time2 = document.getElementById('time2').value;
+  const time3 = document.getElementById('time3').value;
 
   formSnapshot = {
-    name       : document.getElementById('name').value.trim(),
-    phone      : document.getElementById('phone').value.trim(),
-    date       : document.getElementById('date').value,
-    dateLabel  : dateLabel,
-    time       : document.getElementById('time').value,
-    visit_type : visitType,
-    visitLabel : visitType === 'first' ? '初診' : '再診',
-    treatment  : treatment,
+    name          : document.getElementById('name').value.trim(),
+    phone         : document.getElementById('phone').value.trim(),
+    date          : date1,
+    dateLabel     : makeDateLabel(date1),
+    time          : time1,
+    date2         : date2,
+    dateLabel2    : makeDateLabel(date2),
+    time2         : time2,
+    date3         : date3,
+    dateLabel3    : makeDateLabel(date3),
+    time3         : time3,
+    visit_type    : visitType,
+    visitLabel    : visitType === 'first' ? '初診' : '再診',
+    treatment     : treatment,
     treatmentLabel: TREATMENT_LABELS[treatment] || treatment,
-    symptoms   : document.getElementById('symptoms').value.trim(),
-    clinic_id  : clinicData.clinic_id || '',
-    line_user_id: liffProfile ? liffProfile.userId : '',
+    symptoms      : document.getElementById('symptoms').value.trim(),
+    clinic_id     : clinicData.clinic_id || '',
+    line_user_id  : liffProfile ? liffProfile.userId : '',
   };
 
   // 確認テーブル組み立て
   const rows = [
-    ['お名前',     formSnapshot.name],
-    ['電話番号',   formSnapshot.phone],
-    ['希望日',     formSnapshot.dateLabel],
-    ['希望時間',   formSnapshot.time],
-    ['初診 / 再診', formSnapshot.visitLabel],
-    ['診療科目',   formSnapshot.treatmentLabel],
+    ['お名前',       formSnapshot.name],
+    ['電話番号',     formSnapshot.phone],
+    ['第1希望',      formSnapshot.dateLabel + ' ' + formSnapshot.time],
+    ['第2希望',      formSnapshot.dateLabel2 ? formSnapshot.dateLabel2 + ' ' + formSnapshot.time2 : '（なし）'],
+    ['第3希望',      formSnapshot.dateLabel3 ? formSnapshot.dateLabel3 + ' ' + formSnapshot.time3 : '（なし）'],
+    ['初診 / 再診',  formSnapshot.visitLabel],
+    ['診療科目',     formSnapshot.treatmentLabel],
     ['症状・相談内容', formSnapshot.symptoms || '（なし）'],
   ];
   const tbody = document.getElementById('confirm-table');
@@ -1164,16 +1209,24 @@ function onConfirm() {
 // ================================================================
 function restoreForm() {
   if (!formSnapshot) return;
-  document.getElementById('name').value     = formSnapshot.name;
-  document.getElementById('phone').value    = formSnapshot.phone;
-  // 選択日の月が表示されるよう開始月を調整
-  var parts = formSnapshot.date.split('-').map(Number);
-  calStartMonth = new Date(parts[0], parts[1] - 1, 1);
-  buildCalendar();
-  selectCalendarDate(formSnapshot.date);
-  setTimeout(function() {
-    document.getElementById('time').value = formSnapshot.time;
-  }, 50);
+  document.getElementById('name').value  = formSnapshot.name;
+  document.getElementById('phone').value = formSnapshot.phone;
+
+  // 各希望を復元
+  [1, 2, 3].forEach(function(n) {
+    var dateKey = n === 1 ? 'date' : 'date' + n;
+    var timeKey = n === 1 ? 'time' : 'time' + n;
+    var dateVal = formSnapshot[dateKey];
+    if (dateVal) {
+      var parts = dateVal.split('-').map(Number);
+      calStartMonths[n] = new Date(parts[0], parts[1] - 1, 1);
+    }
+    buildCalendar(n);
+    if (dateVal) selectCalendarDate(dateVal, n);
+    setTimeout((function(nn, tv) {
+      return function() { document.getElementById('time' + nn).value = tv; };
+    })(n, formSnapshot[timeKey] || ''), 50);
+  });
   document.getElementById('treatment').value = formSnapshot.treatment;
   updateSymptomsRequired();
   document.getElementById('symptoms').value = formSnapshot.symptoms;
@@ -1202,6 +1255,10 @@ async function onSubmit() {
       phone        : formSnapshot.phone,
       date         : formSnapshot.date,
       time         : formSnapshot.time,
+      date2        : formSnapshot.date2,
+      time2        : formSnapshot.time2,
+      date3        : formSnapshot.date3,
+      time3        : formSnapshot.time3,
       visit_type   : formSnapshot.visit_type,
       treatment    : formSnapshot.treatment,
       symptoms     : formSnapshot.symptoms,
