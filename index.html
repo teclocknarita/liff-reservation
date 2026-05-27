@@ -113,6 +113,19 @@
       padding-top: 8px;
       border-top: 1px solid var(--border);
     }
+    .time-range-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .time-range-row select {
+      flex: 1;
+    }
+    .time-range-sep {
+      flex-shrink: 0;
+      color: var(--subtext);
+      font-size: 14px;
+    }
 
     /* ── フォーム要素 ── */
     .form-group { margin-bottom: 14px; }
@@ -558,11 +571,17 @@
           <div class="error-msg" id="err-date1">第1希望の日付を選択してください</div>
         </div>
         <div class="form-group">
-          <label for="time1">希望時間</label>
-          <select id="time1" disabled>
-            <option value="">— 先に希望日を選択 —</option>
-          </select>
-          <div class="error-msg" id="err-time1">第1希望の時間を選択してください</div>
+          <label>希望時間帯</label>
+          <div class="time-range-row">
+            <select id="timeStart1" disabled onchange="onTimeStartChange(1)">
+              <option value="">— 開始 —</option>
+            </select>
+            <span class="time-range-sep">〜</span>
+            <select id="timeEnd1" disabled>
+              <option value="">— 終了 —</option>
+            </select>
+          </div>
+          <div class="error-msg" id="err-time1">第1希望の時間帯を選択してください</div>
         </div>
       </div>
 
@@ -579,10 +598,16 @@
             <div id="calendar-wrap-2"></div>
           </div>
           <div class="form-group">
-            <label for="time2">希望時間</label>
-            <select id="time2" disabled>
-              <option value="">— 先に希望日を選択 —</option>
-            </select>
+            <label>希望時間帯</label>
+            <div class="time-range-row">
+              <select id="timeStart2" disabled onchange="onTimeStartChange(2)">
+                <option value="">— 開始 —</option>
+              </select>
+              <span class="time-range-sep">〜</span>
+              <select id="timeEnd2" disabled>
+                <option value="">— 終了 —</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -600,10 +625,16 @@
             <div id="calendar-wrap-3"></div>
           </div>
           <div class="form-group">
-            <label for="time3">希望時間</label>
-            <select id="time3" disabled>
-              <option value="">— 先に希望日を選択 —</option>
-            </select>
+            <label>希望時間帯</label>
+            <div class="time-range-row">
+              <select id="timeStart3" disabled onchange="onTimeStartChange(3)">
+                <option value="">— 開始 —</option>
+              </select>
+              <span class="time-range-sep">〜</span>
+              <select id="timeEnd3" disabled>
+                <option value="">— 終了 —</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -1069,28 +1100,58 @@ function selectCalendarDate(dateStr, n) {
 // 日付変更ハンドラ（カレンダー選択後に呼ばれる）
 // ================================================================
 function onDateChange(n) {
-  const dateVal    = document.getElementById('date' + n).value;
-  const timeSelect = document.getElementById('time' + n);
+  const dateVal      = document.getElementById('date' + n).value;
+  const startSelect  = document.getElementById('timeStart' + n);
+  const endSelect    = document.getElementById('timeEnd' + n);
+
+  const resetEnd = function() {
+    endSelect.innerHTML = '<option value="">— 終了 —</option>';
+    endSelect.disabled  = true;
+  };
 
   if (!dateVal) {
-    timeSelect.innerHTML = '<option value="">— 先に希望日を選択 —</option>';
-    timeSelect.disabled = true;
+    startSelect.innerHTML = '<option value="">— 開始 —</option>';
+    startSelect.disabled  = true;
+    resetEnd();
+    return;
+  }
+
+  const schedule   = clinicData.schedule_parsed || [];
+  const startSlots = generateTimeSlots(schedule);
+
+  startSelect.innerHTML = '<option value="">— 開始 —</option>';
+  startSlots.forEach(function(slot) {
+    const opt = document.createElement('option');
+    opt.value = opt.textContent = slot;
+    startSelect.appendChild(opt);
+  });
+  startSelect.disabled = (startSlots.length === 0);
+  if (startSlots.length === 0) {
+    startSelect.innerHTML = '<option value="">（診療時間情報なし）</option>';
+  }
+  resetEnd();
+}
+
+function onTimeStartChange(n) {
+  const startVal  = document.getElementById('timeStart' + n).value;
+  const endSelect = document.getElementById('timeEnd' + n);
+
+  if (!startVal) {
+    endSelect.innerHTML = '<option value="">— 終了 —</option>';
+    endSelect.disabled  = true;
     return;
   }
 
   const schedule = clinicData.schedule_parsed || [];
-  const slots    = generateTimeSlots(schedule);
+  const endSlots = generateEndTimeSlots(schedule, startVal);
 
-  timeSelect.innerHTML = '<option value="">— 時間を選択 —</option>';
-  slots.forEach(function(slot) {
+  endSelect.innerHTML = '<option value="">— 終了 —</option>';
+  endSlots.forEach(function(slot) {
     const opt = document.createElement('option');
     opt.value = opt.textContent = slot;
-    timeSelect.appendChild(opt);
+    endSelect.appendChild(opt);
   });
-  timeSelect.disabled = (slots.length === 0);
-  if (slots.length === 0) {
-    timeSelect.innerHTML = '<option value="">（診療時間情報なし）</option>';
-  }
+  endSelect.disabled = (endSlots.length === 0);
 }
 
 // ================================================================
@@ -1133,10 +1194,15 @@ function validate() {
     clearError('date1');
   }
 
-  // 第1希望時間
-  const time1 = document.getElementById('time1').value;
-  if (!time1) { showFieldError('time1', 'err-time1'); valid = false; }
-  else         { clearError('time1'); }
+  // 第1希望時間帯
+  const timeStart1 = document.getElementById('timeStart1').value;
+  const timeEnd1   = document.getElementById('timeEnd1').value;
+  if (!timeStart1 || !timeEnd1) {
+    document.getElementById('err-time1').classList.add('visible');
+    valid = false;
+  } else {
+    document.getElementById('err-time1').classList.remove('visible');
+  }
 
   // 診療科目
   const treatment = document.getElementById('treatment').value;
@@ -1191,9 +1257,14 @@ function onConfirm() {
   const date1 = document.getElementById('date1').value;
   const date2 = document.getElementById('date2').value;
   const date3 = document.getElementById('date3').value;
-  const time1 = document.getElementById('time1').value;
-  const time2 = document.getElementById('time2').value;
-  const time3 = document.getElementById('time3').value;
+  function getTimeRange(n) {
+    var s = document.getElementById('timeStart' + n).value;
+    var e = document.getElementById('timeEnd' + n).value;
+    return (s && e) ? s + '〜' + e : '';
+  }
+  const time1 = getTimeRange(1);
+  const time2 = getTimeRange(2);
+  const time3 = getTimeRange(3);
 
   formSnapshot = {
     name          : document.getElementById('name').value.trim(),
@@ -1253,9 +1324,12 @@ function toggleSlot(n) {
     icon.textContent = '＋';
     // 値をクリア
     document.getElementById('date' + n).value = '';
-    var sel = document.getElementById('time' + n);
-    sel.innerHTML = '<option value="">— 先に希望日を選択 —</option>';
-    sel.disabled = true;
+    var startSel = document.getElementById('timeStart' + n);
+    startSel.innerHTML = '<option value="">— 開始 —</option>';
+    startSel.disabled  = true;
+    var endSel = document.getElementById('timeEnd' + n);
+    endSel.innerHTML = '<option value="">— 終了 —</option>';
+    endSel.disabled  = true;
     calStartMonths[n] = null;
     document.getElementById('calendar-wrap-' + n).innerHTML = '';
   }
@@ -1290,9 +1364,24 @@ function restoreForm() {
     }
     if (n === 1 || dateVal) buildCalendar(n);
     if (dateVal) selectCalendarDate(dateVal, n);
+    var timeVal = formSnapshot[timeKey] || '';
     setTimeout((function(nn, tv) {
-      return function() { document.getElementById('time' + nn).value = tv; };
-    })(n, formSnapshot[timeKey] || ''), 50);
+      return function() {
+        if (!tv) return;
+        var parts = tv.split('〜');
+        var sv = parts[0] || '';
+        var ev = parts[1] || '';
+        var startSel = document.getElementById('timeStart' + nn);
+        if (startSel) {
+          startSel.value = sv;
+          onTimeStartChange(nn);
+          setTimeout(function() {
+            var endSel = document.getElementById('timeEnd' + nn);
+            if (endSel) endSel.value = ev;
+          }, 20);
+        }
+      };
+    })(n, timeVal), 50);
   });
   document.getElementById('treatment').value = formSnapshot.treatment;
   updateSymptomsRequired();
@@ -1387,8 +1476,28 @@ function generateTimeSlots(schedule) {
     const startMins = timeToMins(range.start);
     const endMins   = timeToMins(range.end);
     if (isNaN(startMins) || isNaN(endMins)) return;
+    // 開始時間候補: 診療開始〜終了の30分前まで（終了時刻は開始にならない）
     for (let m = startMins; m < endMins; m += 30) {
       slots.push(minsToTime(m));
+    }
+  });
+  return slots;
+}
+
+// 選択した開始時間以降の終了時間候補を返す
+// 同じ診療枠内の(start+30min)〜枠終了まで（30分単位、枠終了時刻を含む）
+function generateEndTimeSlots(schedule, startTime) {
+  const startMins = timeToMins(startTime);
+  const slots     = [];
+  schedule.forEach(function(range) {
+    const rangStart = timeToMins(range.start);
+    const rangEnd   = timeToMins(range.end);
+    if (isNaN(rangStart) || isNaN(rangEnd)) return;
+    // 開始時間がこの枠内に含まれるか
+    if (startMins >= rangStart && startMins < rangEnd) {
+      for (let m = startMins + 30; m <= rangEnd; m += 30) {
+        slots.push(minsToTime(m));
+      }
     }
   });
   return slots;
